@@ -164,11 +164,13 @@ def validate_and_set_config(
 ):
     # Handle generation configuration
     is_generation_colocated = None
+    rollout_backend = None
     sampling_params = None
     if "generation" in config and config["generation"] is not None:
         generation_cfg = config["generation"]
         # set generation colocated
         is_generation_colocated = generation_cfg["colocated"]["enabled"]
+        rollout_backend = generation_cfg.get("backend")
         # set sampling params
         sampling_params = TrainingSamplingParams(
             top_k=generation_cfg["top_k"],

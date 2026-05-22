@@ -69,7 +69,8 @@ from nemo_rl.experience.rollouts import (
     run_multi_turn_rollout,
 )
 from nemo_rl.models.generation.interfaces import GenerationInterface
-from nemo_rl.models.generation.sglang import SGLangConfig, SGLangGeneration
+from nemo_rl.models.generation.sglang.config import SGLangConfig
+from nemo_rl.models.generation.sglang.sglang_generation import SGLangGeneration
 from nemo_rl.models.generation.vllm import VllmConfig, VllmGeneration
 from nemo_rl.models.policy import PolicyConfig
 from nemo_rl.models.policy.interfaces import ColocatablePolicyInterface
@@ -605,7 +606,10 @@ def setup(
     def init_sglang():
         """Initialize SGLang generation workers."""
         t0 = time.perf_counter()
-        pg = SGLangGeneration(cluster=inference_cluster, config=generation_config)
+        pg = SGLangGeneration(
+            cluster=inference_cluster,
+            sglang_cfg=generation_config,
+        )
         pg.finish_generation()
         return pg, time.perf_counter() - t0
 
@@ -738,6 +742,9 @@ def setup(
             colocated_inference=colocated_inference,
             worker_init_timing_metrics=worker_init_timing_metrics,
         )
+
+        # Capture rollout TP size on the policy once; refit calls no longer need it.
+        policy.set_rollout_num_gpus_per_engine(policy_generation.num_gpus_per_engine)
 
         print(
             f"  ✓ Using SGLang backend for generation with {policy_config['model_name']}",
@@ -1165,15 +1172,10 @@ def refit_policy_generation(
                 )
 
             if isinstance(policy_generation, SGLangGeneration):
-                sglang_url_to_gpu_uuids = (
-                    policy_generation.get_sglang_url_to_gpu_uuids()
-                )
-                # Stream weights via HTTP
-                flush_success = policy_generation.invalidate_kv_cache()
-                if not flush_success:
-                    print("SGLang KV cache invalidation failed before weight update. ")
+                # Stream weights to colocated SGLang engines via CUDA IPC over HTTP.
                 futures_train = policy.stream_weights_via_http(
-                    sglang_url_to_gpu_uuids=sglang_url_to_gpu_uuids,
+                    rollout_engine_urls=policy_generation.get_rollout_engine_urls(),
+                    buffer_size_bytes=buffer_size_bytes,
                 )
                 # Wait for all workers to complete
                 ray.get(futures_train)
