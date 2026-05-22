@@ -22,7 +22,7 @@ in this file.
 import pytest
 import ray
 import requests
-from helpers import create_worker
+from .helpers import create_worker
 
 pytestmark = pytest.mark.sglang
 

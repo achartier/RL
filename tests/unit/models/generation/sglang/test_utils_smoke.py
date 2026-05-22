@@ -18,7 +18,7 @@ These tests verify basic functionality of helper utilities and do NOT
 require a running SGLang server or GPU.
 """
 
-import helpers  # noqa: F401  — installs env vars + module stubs before nemo_rl imports
+from . import helpers  # noqa: F401  — installs env vars + module stubs before nemo_rl imports
 
 from nemo_rl.models.generation.sglang.utils.ip_port_utils import _wrap_ipv6
 from nemo_rl.models.generation.sglang.utils.ray_utils import (

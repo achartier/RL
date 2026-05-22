@@ -24,7 +24,7 @@ RayVirtualCluster), we test each component that __init__ wires together:
 import pytest
 import ray
 import requests
-from helpers import create_worker
+from .helpers import create_worker
 
 
 pytestmark = pytest.mark.sglang

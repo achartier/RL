@@ -35,7 +35,7 @@ import pytest
 import ray
 import torch
 import torch.distributed as dist
-from helpers import make_actor_env_vars, post_and_assert_200
+from .helpers import make_actor_env_vars, post_and_assert_200
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
 from nemo_rl.distributed.virtual_cluster import RayVirtualCluster

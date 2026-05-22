@@ -30,7 +30,7 @@ state it found it.
 
 import pytest
 import ray
-from helpers import create_worker, post_and_assert_200
+from .helpers import create_worker, post_and_assert_200
 
 pytestmark = pytest.mark.sglang
 

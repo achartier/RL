@@ -31,7 +31,7 @@ import gc
 import pytest
 import ray
 import torch
-from helpers import (
+from .helpers import (
     make_generation_sampling_params,
     post_and_assert_200,
 )

@@ -18,7 +18,7 @@ All tests use a real Ray cluster and a real sglang_router subprocess.
 Each test creates its own RouterActor to avoid cross-test interference.
 """
 
-import helpers  # noqa: F401  — installs env vars + module stubs before nemo_rl imports
+from . import helpers  # noqa: F401  — installs env vars + module stubs before nemo_rl imports
 import pytest
 import ray
 import requests
