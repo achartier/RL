@@ -254,6 +254,35 @@ class SGLangGenerationWorker:
                 json=payload,
             )
             response.raise_for_status()
+            self._wait_for_router_registration()
+
+    def _wait_for_router_registration(
+        self, timeout: float = 30.0, interval: float = 0.5
+    ) -> None:
+        """Wait until this worker is visible through the router's workers API."""
+        workers_url = f"http://{self.router_ip}:{self.router_port}/workers"
+        deadline = time.monotonic() + timeout
+        last_error = None
+
+        while time.monotonic() < deadline:
+            try:
+                response = requests.get(workers_url, timeout=5)
+                response.raise_for_status()
+                workers = response.json().get("workers", [])
+                if any(
+                    worker.get("url") == self.server_base_url for worker in workers
+                ):
+                    return
+            except Exception as e:
+                last_error = e
+
+            time.sleep(interval)
+
+        detail = f" Last error: {last_error}" if last_error is not None else ""
+        raise RuntimeError(
+            f"Timed out waiting for worker {self.server_base_url} to appear in "
+            f"router {workers_url}.{detail}"
+        )
 
     def _make_request(self, endpoint: str, payload: dict | None = None):
         """Make a POST request to the specified endpoint with the given payload.

@@ -78,10 +78,12 @@ def test_multiple_workers_init(two_workers):
 
 def test_workers_register_with_router(two_workers, router):
     """Both workers appear in the router's /workers list."""
+    worker_urls = {ray.get(w.get_base_url.remote()) for w in two_workers}
     resp = requests.get(f"http://{router['ip']}:{router['port']}/workers", timeout=10)
     assert resp.status_code == 200
     workers_list = resp.json().get("workers", [])
-    assert len(workers_list) >= 2
+    registered_urls = {w["url"] for w in workers_list}
+    assert worker_urls.issubset(registered_urls)
 
 
 def test_workers_have_distinct_urls(two_workers):

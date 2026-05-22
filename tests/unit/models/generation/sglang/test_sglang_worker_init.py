@@ -78,11 +78,11 @@ def test_init_sets_base_url(worker):
 
 def test_init_registers_with_router(worker, router):
     """The worker registers itself with the session router on init."""
+    worker_url = ray.get(worker.get_base_url.remote())
     resp = requests.get(f"http://{router['ip']}:{router['port']}/workers", timeout=10)
     assert resp.status_code == 200
     workers_list = resp.json().get("workers", [])
-    # At least one worker should be registered
-    assert len(workers_list) >= 1
+    assert any(w["url"] == worker_url for w in workers_list)
 
 
 def test_health_generate_returns_true(worker):

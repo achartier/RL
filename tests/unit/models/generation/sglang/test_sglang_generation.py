@@ -25,7 +25,6 @@ Parametrised over two configurations (both use 2 GPUs total):
 Model: Qwen/Qwen3-0.6B
 """
 
-import asyncio
 import gc
 
 import pytest
@@ -343,7 +342,7 @@ def test_generate_async_yields_single_sample(sglang_gen, tokenizer):
             results.append((idx, batch))
         return results
 
-    results = asyncio.run(_run())
+    results = sglang_gen._async_loop.run(_run())
     assert len(results) == 1
     idx, batch = results[0]
     assert idx == 0
@@ -362,7 +361,7 @@ def test_generate_async_output_matches_generate(sglang_gen, tokenizer):
             results.append(batch)
         return results[0]
 
-    async_result = asyncio.run(_run())
+    async_result = sglang_gen._async_loop.run(_run())
 
     sync_len = sync_result["generation_lengths"][0].item()
     async_len = async_result["generation_lengths"][0].item()
@@ -386,7 +385,7 @@ def test_generate_one_sample_returns_correct_tuple(sglang_gen, tokenizer):
     sp = make_generation_sampling_params(max_new_tokens=5, temperature=0.0)
     input_ids = tokenizer.encode("The capital of France is")
 
-    result = asyncio.run(
+    result = sglang_gen._async_loop.run(
         sglang_gen.generate_one_sample(sp, input_ids, index=42)
     )
 
