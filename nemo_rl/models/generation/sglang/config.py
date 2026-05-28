@@ -60,8 +60,8 @@ class SglangSpecificArgs(TypedDict):
 
     # Nested server/router configs. Kept under ``sglang_cfg`` so YAML and call
     # sites have a single sglang namespace instead of three sibling fields.
-    sglang_server: SGLangServerConfig
-    sglang_router: SGLangRouterConfig
+    sglang_server_config: SGLangServerConfig
+    sglang_router_config: SGLangRouterConfig
 
     # Path to model weights (local folder or HF repo id).
     model_path: NotRequired[str]

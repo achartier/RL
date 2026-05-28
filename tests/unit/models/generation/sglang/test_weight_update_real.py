@@ -93,7 +93,7 @@ def _make_sglang_cfg(tp_size, pad_token_id=PAD_TOKEN_ID):
             "disable_piecewise_cuda_graph": True,
             "disable_cuda_graph": True,
             "mem_fraction_static": 0.3,
-            "sglang_server": {
+            "sglang_server_config": {
                 "num_gpus": 2,
                 "num_gpus_per_engine": tp_size,
                 "needs_offload": True,
@@ -101,7 +101,7 @@ def _make_sglang_cfg(tp_size, pad_token_id=PAD_TOKEN_ID):
                 "sglang_server_concurrency": 64,
                 "pause_generation_mode": "retract",
             },
-            "sglang_router": {
+            "sglang_router_config": {
                 "sglang_router_ip": None,
                 "sglang_router_port": None,
             },

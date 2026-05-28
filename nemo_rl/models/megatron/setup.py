@@ -170,7 +170,6 @@ def validate_and_set_config(
         generation_cfg = config["generation"]
         # set generation colocated
         is_generation_colocated = generation_cfg["colocated"]["enabled"]
-        rollout_backend = generation_cfg.get("backend")
         # set sampling params
         sampling_params = TrainingSamplingParams(
             top_k=generation_cfg["top_k"],

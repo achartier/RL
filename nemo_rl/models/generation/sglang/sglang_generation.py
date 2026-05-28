@@ -72,7 +72,7 @@ class SGLangGeneration(GenerationInterface):
         self._http_client = HttpClient(sglang_cfg)
 
         # --- Engine topology (formerly ``ServerGroup``) ------------------
-        sglang_server_cfg = sglang_cfg["sglang_cfg"]["sglang_server"]
+        sglang_server_cfg = sglang_cfg["sglang_cfg"]["sglang_server_config"]
         gpus_per_engine = sglang_server_cfg["num_gpus_per_engine"]
         num_gpus_per_node = cluster.num_gpus_per_node
         num_gpu_per_engine_local = min(gpus_per_engine, num_gpus_per_node)
@@ -85,7 +85,6 @@ class SGLangGeneration(GenerationInterface):
         self.rank_offset: int = 0
         self.gpu_offset: int = 0
         self.needs_offload: bool = sglang_server_cfg["needs_offload"]
-        self.pause_generation_mode: str = sglang_server_cfg["pause_generation_mode"]
         self.model_path: str | None = sglang_cfg["sglang_cfg"]["model_path"]
 
         # --- Router bootstrap --------------------------------------------
@@ -93,7 +92,7 @@ class SGLangGeneration(GenerationInterface):
         # mutate the caller's config dict. Workers receive these as explicit
         # ``router_ip`` / ``router_port`` kwargs in ``init.remote(...)``.
         router_ip, router_port, router_actor = _start_router(
-            sglang_cfg["sglang_cfg"].get("sglang_router") or {}
+            sglang_cfg["sglang_cfg"].get("sglang_router_config") or {}
         )
         self.router_ip: str = router_ip
         self.router_port: int = router_port
@@ -116,8 +115,7 @@ class SGLangGeneration(GenerationInterface):
 
     @property
     def engines(self) -> list:
-        """Node-0 engines only (one entry per logical engine).
-        """
+        """Node-0 engines only (one entry per logical engine)."""
         return self.all_engines[:: self.nodes_per_engine]
 
     @property
@@ -138,8 +136,7 @@ class SGLangGeneration(GenerationInterface):
         ]
 
     def get_rollout_engine_urls(self) -> list[str]:
-        """Resolve node-0 engine HTTP base URLs once on the driver.
-        """
+        """Resolve node-0 engine HTTP base URLs once on the driver."""
         return ray.get([e.get_base_url.remote() for e in self.rollout_engines])
 
     def _start_engines(
@@ -256,25 +253,6 @@ class SGLangGeneration(GenerationInterface):
                 if engine is not None
             ]
         )
-
-    def pause_generation(self) -> None:
-        """Pause generation on every node-0 engine using the configured mode."""
-        engines = [e for e in self.engines if e is not None]
-        if not engines:
-            return
-        ray.get(
-            [
-                e.pause_generation.remote(mode=self.pause_generation_mode)
-                for e in engines
-            ]
-        )
-
-    def continue_generation(self) -> None:
-        """Resume generation on every node-0 engine."""
-        engines = [e for e in self.engines if e is not None]
-        if not engines:
-            return
-        ray.get([e.continue_generation.remote() for e in engines])
 
     def shutdown(self) -> bool:
         ok = True
@@ -466,7 +444,7 @@ class SGLangGeneration(GenerationInterface):
 
         # Dispatch concurrently to the SGLang router with bounded concurrency.
         # Max concurrency = per-engine concurrency * number of engines.
-        sglang_server_cfg = self.sglang_cfg["sglang_cfg"]["sglang_server"]
+        sglang_server_cfg = self.sglang_cfg["sglang_cfg"]["sglang_server_config"]
         max_concurrency = (
             sglang_server_cfg["sglang_server_concurrency"]
             * sglang_server_cfg["num_gpus"]
@@ -753,19 +731,13 @@ class SGLangGeneration(GenerationInterface):
         if not engines:
             return True
         try:
-            results = ray.get([e.invalidate_kv_cache.remote() for e in engines])
+            ray.get([e.invalidate_kv_cache.remote() for e in engines])
         except Exception as e:
             logger.error(f"[sglang refit] Error flushing SGLang caches: {e}")
             return False
 
-        success = all(results)
-        if success:
-            logger.info("[sglang refit] All SGLang server caches flushed successfully")
-        else:
-            logger.warning(
-                "[sglang refit] WARNING - Some SGLang server caches failed to flush"
-            )
-        return success
+        logger.info("[sglang refit] All SGLang server caches flushed successfully")
+        return True
 
     # ---------------------------------------------------------------------------
     # Generate one sample helper

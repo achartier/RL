@@ -59,14 +59,11 @@ fi
 
 # Check and run sglang tests (skip if sglang was not built into the container)
 if python -c "import sglang" 2>/dev/null; then
-    SGLANG_TEST_PATHS=(
-        "unit/models/generation/sglang/test_weight_update_real.py"
-    )
-    exit_code=$(cd ${PROJECT_ROOT}/tests && uv run --extra sglang pytest "${SGLANG_TEST_PATHS[@]}" "${EXCLUDED_UNIT_TESTS[@]}" --collect-only --hf-gated --sglang-only -q >/dev/null 2>&1; echo $?)
+    exit_code=$(cd ${PROJECT_ROOT}/tests && uv run --extra sglang pytest "${TEST_PATHS[@]}" "${IGNORE[@]}" "${EXCLUDED_UNIT_TESTS[@]}" --collect-only --hf-gated --sglang-only -q >/dev/null 2>&1; echo $?)
     if [[ $exit_code -eq 5 ]]; then
         echo "No sglang tests to run"
     else
-        uv run --extra sglang bash -x ./tests/run_unit.sh "${SGLANG_TEST_PATHS[@]}" "${EXCLUDED_UNIT_TESTS[@]}" --cov=nemo_rl --cov-append --cov-report=term-missing --cov-report=json --hf-gated --sglang-only
+        uv run --extra sglang bash -x ./tests/run_unit.sh "${TEST_PATHS[@]}" "${IGNORE[@]}" "${EXCLUDED_UNIT_TESTS[@]}" --cov=nemo_rl --cov-append --cov-report=term-missing --cov-report=json --hf-gated --sglang-only
     fi
 else
     echo "sglang not installed, skipping sglang tests"

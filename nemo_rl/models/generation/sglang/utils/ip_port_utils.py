@@ -44,7 +44,7 @@ def _allocate_rollout_engine_addr_and_ports_normal(
     # 4. other ports for dp_attention, which is of size 4 + dp_size
 
     sglang_dp_size = sglang_cfg["sglang_cfg"]["dp_size"]
-    num_gpus_per_engine = sglang_cfg["sglang_cfg"]["sglang_server"][
+    num_gpus_per_engine = sglang_cfg["sglang_cfg"]["sglang_server_config"][
         "num_gpus_per_engine"
     ]
     num_gpus_per_node = gpus_per_node

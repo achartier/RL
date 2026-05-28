@@ -3,174 +3,18 @@ import multiprocessing
 import os
 import time
 from collections.abc import Callable
-from importlib.util import find_spec
 
 import ray
 import requests
-from urllib3.exceptions import NewConnectionError
 
 from nemo_rl.models.generation.sglang.utils.ip_port_utils import _format_v6_uri
+from nemo_rl.models.generation.sglang.utils.patches import _apply_sglang_compat_patches
 from nemo_rl.models.generation.sglang.utils.ray_utils import (
     get_current_node_ip,
     get_free_port,
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _get_sglang_file(relative_path: str) -> str:
-    spec = find_spec("sglang")
-    if spec is None or not spec.submodule_search_locations:
-        raise RuntimeError(
-            f"sglang package not found while attempting to patch '{relative_path}'. "
-        )
-
-    base_dir = next(iter(spec.submodule_search_locations))
-    file_path = os.path.join(base_dir, *relative_path.split("/"))
-    if not os.path.exists(file_path):
-        raise RuntimeError(
-            f"Expected sglang file '{relative_path}' not found at '{file_path}'. "
-            "The sglang version may have moved this file; compat patch cannot be applied."
-        )
-    return file_path
-
-
-def _write_and_verify(file_path: str, content: str, sentinel: str) -> None:
-    tmp_path = f"{file_path}.nemo_rl_compat.{os.getpid()}.tmp"
-    with open(tmp_path, "w") as f:
-        f.write(content)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(tmp_path, file_path)
-
-    with open(file_path, "r") as f:
-        verify = f.read()
-    if sentinel not in verify:
-        raise RuntimeError(
-            f"Compat patch verification failed for {file_path}: "
-            f"sentinel '{sentinel}' not present after write. "
-            "The write may have been silently dropped by the filesystem."
-        )
-
-
-def _patch_sglang_safe_unpickler() -> None:
-    file_to_patch = _get_sglang_file("srt/utils/common.py")
-
-    with open(file_to_patch, "r") as f:
-        content = f.read()
-
-    sentinel = '"nemo_rl.models.generation.sglang.utils.train_utils."'
-    if sentinel in content:
-        return
-
-    anchor = '        "torch.nn.parameter.",\n'
-    insertion = (
-        anchor + '        "nemo_rl.models.generation.sglang.utils.train_utils.",\n'
-    )
-    if anchor not in content:
-        raise RuntimeError(
-            f"SafeUnpickler allowlist anchor '{anchor.strip()}' not found in "
-            f"{file_to_patch}."
-        )
-
-    content = content.replace(anchor, insertion, 1)
-    _write_and_verify(file_to_patch, content, sentinel)
-    logger.info("Patched SafeUnpickler allowlist in %s.", file_to_patch)
-
-
-def _override_sglang_imbalance_check_env() -> None:
-    """Force-disable sglang's per-GPU memory imbalance check.
-
-    Pop the legacy names so the shim has nothing to copy, then set
-    ``ENABLE=false`` directly. Inherited env reaches the subprocesses
-    cleaned, so the shim no longer overwrites our ENABLE on re-import.
-    """
-    for legacy in (
-        "SGL_DISABLE_TP_MEMORY_INBALANCE_CHECK",
-        "SGLANG_DISABLE_TP_MEMORY_INBALANCE_CHECK",
-    ):
-        os.environ.pop(legacy, None)
-    os.environ["SGLANG_ENABLE_TP_MEMORY_INBALANCE_CHECK"] = "false"
-
-
-def _get_megatron_file(subpackage: str, relative_path: str) -> str | None:
-    """Locate a file inside ``megatron.<subpackage>`` (e.g. ``core``, ``training``).
-
-    Returns ``None`` if megatron isn't importable so callers can treat that
-    as "nothing to patch". Raises if the package is present but the
-    expected file is missing (signals a megatron version mismatch).
-    """
-    full_pkg = f"megatron.{subpackage}"
-    try:
-        spec = find_spec(full_pkg)
-    except (ImportError, ValueError):
-        return None
-    if spec is None or not spec.submodule_search_locations:
-        return None
-
-    base_dir = next(iter(spec.submodule_search_locations))
-    file_path = os.path.join(base_dir, *relative_path.split("/"))
-    if not os.path.exists(file_path):
-        raise RuntimeError(
-            f"Expected megatron file '{full_pkg}/{relative_path}' not found at "
-            f"'{file_path}'. The megatron version may have moved this file; "
-            "compat patch cannot be applied."
-        )
-    return file_path
-
-
-def _patch_megatron_hook_mode_in(file_path: str) -> None:
-    """Comment out ``torch_memory_saver.hook_mode = "torch"`` in a megatron file.
-
-    Megatron sets ``tms.hook_mode = "torch"`` at module import time on the
-    global ``torch_memory_saver`` singleton. That mutation breaks sglang's
-    pauseable CUDA graph path, which asserts ``_hook_mode == "preload"``
-    inside ``TorchMemorySaver.cuda_graph(...)``. Commenting the line out
-    leaves the singleton at its default ``"preload"`` mode that sglang
-    expects.
-    """
-    with open(file_path, "r") as f:
-        content = f.read()
-
-    sentinel = '# torch_memory_saver.hook_mode = "torch"'
-    if sentinel in content:
-        return
-
-    anchor = '    torch_memory_saver.hook_mode = "torch"\n'
-    if anchor not in content:
-        raise RuntimeError(
-            f"Megatron hook_mode anchor '{anchor.strip()}' not found in "
-            f"{file_path}; the megatron version may have moved or removed it."
-        )
-
-    replacement = (
-        '    # torch_memory_saver.hook_mode = "torch"  '
-        "# patched by nemo_rl: conflicts with sglang pauseable CUDA Graph\n"
-    )
-    content = content.replace(anchor, replacement, 1)
-    _write_and_verify(file_path, content, sentinel)
-    logger.info("Patched megatron tms.hook_mode mutation in %s.", file_path)
-
-
-def _patch_megatron_dynamic_context_hook_mode() -> None:
-    file_path = _get_megatron_file("core", "inference/contexts/dynamic_context.py")
-    if file_path is None:
-        return
-    _patch_megatron_hook_mode_in(file_path)
-
-
-def _patch_megatron_training_hook_mode() -> None:
-    file_path = _get_megatron_file("training", "training.py")
-    if file_path is None:
-        return
-    _patch_megatron_hook_mode_in(file_path)
-
-
-def _apply_sglang_compat_patches() -> None:
-    _patch_sglang_safe_unpickler()
-    _override_sglang_imbalance_check_env()
-    _patch_megatron_dynamic_context_hook_mode()
-    _patch_megatron_training_hook_mode()
 
 
 @ray.remote  # pragma: no cover
@@ -269,9 +113,7 @@ class SGLangGenerationWorker:
                 response = requests.get(workers_url, timeout=5)
                 response.raise_for_status()
                 workers = response.json().get("workers", [])
-                if any(
-                    worker.get("url") == self.server_base_url for worker in workers
-                ):
+                if any(worker.get("url") == self.server_base_url for worker in workers):
                     return
             except Exception as e:
                 last_error = e
@@ -387,16 +229,6 @@ class SGLangGenerationWorker:
                 response.raise_for_status()
         kill_process_tree(self.process.pid)
 
-    def get_weight_version(self):
-        if self.node_rank != 0:
-            return
-        # new sglang change api from /get_weight_version to /model_info
-        for endpoint in ("/model_info", "/get_weight_version"):
-            response = requests.get(f"{self.server_base_url}{endpoint}")
-            if response.status_code == 200:
-                return response.json()["weight_version"]
-        response.raise_for_status()
-
     def release_memory_occupation(self, tags: list[str] | None = None):
         """Release memory occupation. Available tags: weights, kv_cache."""
         from sglang.srt.constants import (
@@ -445,91 +277,6 @@ class SGLangGenerationWorker:
     def check_weights(self, action: str):
         return self._make_request("weights_checker", {"action": action})
 
-    def init_weights_update_group(
-        self, master_address, master_port, rank_offset, world_size, group_name, backend
-    ):
-        return self._make_request(
-            "init_weights_update_group",
-            {
-                "master_address": master_address,
-                "master_port": master_port,
-                "rank_offset": rank_offset,
-                "world_size": world_size,
-                "group_name": group_name,
-                "backend": backend,
-            },
-        )
-
-    def destroy_weights_update_group(self, group_name):
-        try:
-            return self._make_request(
-                "destroy_weights_update_group",
-                {
-                    "group_name": group_name,
-                },
-            )
-        except requests.exceptions.RequestException:
-            # catch the case there the engine is just created and does not have the group.
-            pass
-
-    def update_weights_from_distributed(
-        self,
-        names,
-        dtypes,
-        shapes,
-        group_name,
-        flush_cache=False,
-        weight_version: str | None = None,
-    ):
-        payload = {
-            "names": names,
-            "dtypes": [str(dtype).replace("torch.", "") for dtype in dtypes],
-            "shapes": shapes,
-            "group_name": group_name,
-            "flush_cache": flush_cache,
-        }
-        if weight_version is not None:
-            payload["weight_version"] = weight_version
-        return self._make_request(
-            "update_weights_from_distributed",
-            payload,
-        )
-
-    def pause_generation(self, mode: str = "retract"):
-        response = requests.post(
-            f"{self.server_base_url}/pause_generation",
-            json={"mode": mode},
-        )
-        response.raise_for_status()
-        return response
-
-    def continue_generation(self):
-        response = requests.post(f"{self.server_base_url}/continue_generation", json={})
-        response.raise_for_status()
-        return response
-
-    def post_process_weights(
-        self,
-        restore_weights_before_load: bool = False,
-        post_process_quantization: bool = False,
-    ):
-        """Update model weights from tensor data.
-
-        The HTTP server will only post meta data, and the real weights will be
-        copied directly from GPUs.
-
-        Note: The model should be on GPUs rather than CPU for this functionality
-        to work properly. If you encounter issues, ensure your model is loaded
-        on GPU devices rather than CPU.
-        """
-        return self._make_request(
-            "post_process_weights",
-            {
-                "restore_weights_before_load": restore_weights_before_load,
-                "post_process_quantization": post_process_quantization,
-            },
-        )
-
     def start_profile(
         self,
         # The output directory
@@ -577,37 +324,17 @@ class SGLangGenerationWorker:
             return None
         return self.server_base_url
 
-    def invalidate_kv_cache(self) -> bool:
-        """Flush the cache of the server.
-
-        Returns:
-            ``True`` on a successful flush, ``False`` if the server reported
-            pending requests or another non-fatal error. Peer (non-node-0)
-            ranks return ``True`` since they do not own the HTTP server.
-
-        Raises:
-            NewConnectionError: if the engine HTTP server is unreachable
-                (engine likely crashed); the caller cannot make progress
-                with stale KV state, so we surface the failure rather than
-                swallowing it.
-        """
+    def invalidate_kv_cache(self) -> None:
+        """Flush this server's KV cache."""
         if self.node_rank != 0:
-            return True
-        # flush_cache returns non-200 when there are pending requests. Sync RL
-        # never calls this with pending work; async RL will get its own retry
-        # policy in a follow-up PR, so for now a single attempt is enough.
-        try:
-            response = requests.get(f"{self.server_base_url}/flush_cache")
-        except NewConnectionError:
-            logger.exception("Connection error flushing cache")
-            raise
+            return
+
+        response = requests.get(f"{self.server_base_url}/flush_cache")
         if response.status_code != 200:
-            logger.info(
-                "flush_cache returned %s; likely pending requests on the server.",
-                response.status_code,
+            response.raise_for_status()
+            raise RuntimeError(
+                f"flush_cache returned unexpected status {response.status_code}"
             )
-            return False
-        return True
 
     # ----------------------------------------------------------------------------
     # Compute Server args
@@ -620,7 +347,7 @@ class SGLangGenerationWorker:
         port,
     ):
         sglang_cfg_inner = self.sglang_cfg["sglang_cfg"]
-        sglang_server_cfg = sglang_cfg_inner["sglang_server"]
+        sglang_server_cfg = sglang_cfg_inner["sglang_server_config"]
         _gpus_per_engine = (
             self.num_gpus_per_engine or sglang_server_cfg["num_gpus_per_engine"]
         )

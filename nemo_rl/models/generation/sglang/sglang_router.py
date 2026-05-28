@@ -17,19 +17,9 @@ logger = logging.getLogger(__name__)
 
 
 def run_router(args):
-    try:
-        from sglang_router.launch_router import launch_router
+    from sglang_router.launch_router import launch_router
 
-        router = launch_router(args)
-        if router is None:
-            return 1
-        return 0
-    except Exception:
-        # Runs inside a subprocess; surface the full traceback at ERROR level
-        # so it isn't filtered by INFO config, and re-raise so the subprocess
-        # exits non-zero (caller asserts on ``_process.is_alive()``).
-        logger.exception("sglang router failed to launch")
-        raise
+    launch_router(args)
 
 
 @ray.remote(num_cpus=1, num_gpus=0)

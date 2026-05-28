@@ -18,7 +18,11 @@ These tests verify basic functionality of helper utilities and do NOT
 require a running SGLang server or GPU.
 """
 
+import pytest
+
 from . import helpers  # noqa: F401  — installs env vars + module stubs before nemo_rl imports
+
+pytestmark = pytest.mark.sglang
 
 from nemo_rl.models.generation.sglang.utils.ip_port_utils import _wrap_ipv6
 from nemo_rl.models.generation.sglang.utils.ray_utils import (
@@ -76,5 +80,3 @@ def test_serializer_roundtrip():
     assert isinstance(serialized, str) and len(serialized) > 0
     deserialized = MultiprocessingSerializer.deserialize(serialized)
     assert deserialized == obj
-
-

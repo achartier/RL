@@ -75,7 +75,7 @@ class HttpClient:
     def init(self, args: SGLangConfig) -> None:
         """Configure HTTP client limits and optional distributed POST actors."""
         sglang_cfg = args.get("sglang_cfg") or {}
-        server_cfg = sglang_cfg.get("sglang_server") or {}
+        server_cfg = sglang_cfg.get("sglang_server_config") or {}
         if not server_cfg.get("num_gpus"):
             return
 
@@ -85,7 +85,7 @@ class HttpClient:
             // server_cfg["num_gpus_per_engine"]
         )
 
-        router_cfg = sglang_cfg.get("sglang_router") or {}
+        router_cfg = sglang_cfg.get("sglang_router_config") or {}
         if router_cfg.get("use_distributed_post"):
             self._init_ray_distributed_post(args)
             self._distributed_post_enabled = True
@@ -129,10 +129,9 @@ class HttpClient:
         for node in nodes:
             node_id = node["NodeID"]
             scheduling = NodeAffinitySchedulingStrategy(node_id=node_id, soft=False)
-            for _ in range(args["sglang_cfg"]["sglang_server"]["num_gpus_per_engine"]):
+            for _ in range(args["sglang_cfg"]["sglang_server_config"]["num_gpus_per_engine"]):
                 actor = _HttpPosterActor.options(
                     name=None,
-                    lifetime="detached",
                     scheduling_strategy=scheduling,
                     max_concurrency=per_actor_conc,
                     # Use tiny CPU to schedule

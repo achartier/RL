@@ -116,7 +116,7 @@ def make_sglang_cfg(
             "disable_piecewise_cuda_graph": True,
             "disable_cuda_graph": True,
             "mem_fraction_static": 0.3,
-            "sglang_server": {
+            "sglang_server_config": {
                 "num_gpus": num_gpus,
                 "num_gpus_per_engine": tp_size,
                 "needs_offload": True,
@@ -124,7 +124,7 @@ def make_sglang_cfg(
                 "sglang_server_concurrency": 64,
                 "pause_generation_mode": "retract",
             },
-            "sglang_router": {
+            "sglang_router_config": {
                 "sglang_router_ip": router_ip,
                 "sglang_router_port": router_port,
             },
