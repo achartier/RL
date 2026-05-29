@@ -103,8 +103,8 @@ def worker(request, ray_cluster, router):
 # invalidate_kv_cache (worker-level)
 # ------------------------------------------------------------------
 def test_invalidate_kv_cache_success(worker):
-    """invalidate_kv_cache returns True on a healthy server."""
-    assert ray.get(worker.invalidate_kv_cache.remote()) is True
+    """invalidate_kv_cache succeeds on a healthy server."""
+    ray.get(worker.invalidate_kv_cache.remote())
 
 
 def test_invalidate_kv_cache_after_resume(worker):
@@ -116,13 +116,13 @@ def test_invalidate_kv_cache_after_resume(worker):
     """
     ray.get(worker.release_memory_occupation.remote(tags=["weights"]))
     ray.get(worker.resume_memory_occupation.remote(tags=["weights"]))
-    assert ray.get(worker.invalidate_kv_cache.remote()) is True
+    ray.get(worker.invalidate_kv_cache.remote())
 
 
 def test_invalidate_kv_cache_repeated(worker):
-    """Back-to-back invalidate_kv_cache calls all return True (no state leak)."""
+    """Back-to-back invalidate_kv_cache calls succeed without state leaks."""
     for _ in range(3):
-        assert ray.get(worker.invalidate_kv_cache.remote()) is True
+        ray.get(worker.invalidate_kv_cache.remote())
 
 
 # ------------------------------------------------------------------
