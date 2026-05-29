@@ -288,19 +288,19 @@ def run_env_eval(vllm_generation, dataloader, env, master_config):
         env: Environment that scores responses.
         master_config: Configuration settings.
     """
-    # Check if async engine is enabled and run appropriate version
-    if master_config.generation["vllm_cfg"]["async_engine"]:
-        asyncio.run(
-            _run_env_eval_impl(
-                vllm_generation, dataloader, env, master_config, use_async=True
-            )
+    # Use the async eval path for vLLM with async_engine enabled, or for SGLang
+    # (which always uses the async generation path); otherwise run sync.
+    generation_config = master_config.generation
+    backend = generation_config.get("backend", "")
+    use_async = backend == "sglang" or (
+        backend == "vllm"
+        and generation_config.get("vllm_cfg", {}).get("async_engine", False)
+    )
+    asyncio.run(
+        _run_env_eval_impl(
+            vllm_generation, dataloader, env, master_config, use_async=use_async
         )
-    else:
-        asyncio.run(
-            _run_env_eval_impl(
-                vllm_generation, dataloader, env, master_config, use_async=False
-            )
-        )
+    )
 
 
 async def _run_env_eval_impl(

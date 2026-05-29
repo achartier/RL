@@ -1009,21 +1009,36 @@ def scale_rewards(
     return repeated_batch
 
 
+def _is_vllm_async_engine(master_config: MasterConfig) -> bool:
+    """True only for the vLLM backend with ``async_engine`` enabled.
+
+    Used by paths that are vLLM-only (NeMo-Gym, async GRPO with in-flight
+    weight updates), as opposed to ``_should_use_async_rollouts`` which also
+    routes SGLang through the async rollout path.
+    """
+    generation_config = master_config.policy["generation"]
+    if generation_config is None:
+        return False
+    if generation_config.get("backend", "") != "vllm":
+        return False
+    return generation_config.get("vllm_cfg", {}).get("async_engine", False)
+
+
 def _should_use_async_rollouts(master_config: MasterConfig) -> bool:
     """Determine if async rollouts should be used based on the configuration.
 
-    Returns True if vLLM backend is used with async_engine enabled.
+    Returns True for the vLLM backend with ``async_engine`` enabled, and for
+    the SGLang backend, which always uses the async per-sample rollout path
+    (it has no sync/async engine distinction).
     """
     generation_config = master_config.policy["generation"]
     if generation_config is None:
         return False
 
-    backend = generation_config.get("backend", "")
-    if backend != "vllm":
-        return False
+    if generation_config.get("backend", "") == "sglang":
+        return True
 
-    vllm_cfg = generation_config.get("vllm_cfg", {})
-    return vllm_cfg.get("async_engine", False)
+    return _is_vllm_async_engine(master_config)
 
 
 def _should_use_nemo_gym(master_config: MasterConfig) -> bool:
@@ -1033,12 +1048,12 @@ def _should_use_nemo_gym(master_config: MasterConfig) -> bool:
     if not should_use_nemo_gym:
         return should_use_nemo_gym
 
-    # Validate the setup for training with NeMo-Gym
-    assert _should_use_async_rollouts(master_config), (
+    # Validate the setup for training with NeMo-Gym (vLLM-only)
+    assert _is_vllm_async_engine(master_config), (
         "❌ Error: In order to use NeMo-Gym, you must use vllm generation backend with `async_engine: true`!"
     )
 
-    # We piggyback off of `_should_use_async_rollouts` to guarantee the existence of these configs.
+    # We piggyback off of `_is_vllm_async_engine` to guarantee the existence of these configs.
     generation_config = master_config.policy["generation"]
     should_expose_http_server = generation_config["vllm_cfg"].get("expose_http_server")
     assert should_expose_http_server, (
@@ -2467,8 +2482,9 @@ def async_grpo_train(
         master_config: Master configuration
         max_trajectory_age_steps: Maximum age (in training steps) for trajectories to be used in training
     """
-    # Ensure we are running with a compatible async generation backend
-    assert _should_use_async_rollouts(master_config), (
+    # Ensure we are running with a compatible async generation backend.
+    # Async GRPO (with in-flight weight updates) is vLLM-only.
+    assert _is_vllm_async_engine(master_config), (
         "Async GRPO requires vLLM backend with vllm_cfg.async_engine=True. "
         "Set policy.generation.vllm_cfg.async_engine to true in your config."
     )
