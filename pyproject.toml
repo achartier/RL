@@ -23,8 +23,8 @@ maintainers = [
 ]
 dependencies = [
   "setuptools",
-  "pip",                                                                                                              # Required for frozen environments; uv venv --seed may not reliably install pip
-  "ninja",                                                                                                            # for flash-attn parallel build
+  "pip",                                                                                                 # Required for frozen environments; uv venv --seed may not reliably install pip
+  "ninja",                                                                                               # for flash-attn parallel build
   "torch==2.10.0",
   "triton; sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')",
   "colored==2.2.3",
@@ -41,6 +41,7 @@ dependencies = [
   "nvidia-ml-py",
   "hydra-core",
   "tiktoken",
+  "sentencepiece",
   "blobfile",
   "debugpy",
   "nvtx",
@@ -49,7 +50,8 @@ dependencies = [
   "sympy>=1.14.0",
   "pillow>=12.1.1",
   "torchvision==0.25.0",
-  "transformers==5.3.0",
+  # Keep the base range broad enough while allowing backend extras to tighten as needed.
+  "transformers>=5.3.0,<=5.6.0",
   "num2words>=0.5.14",                                                                                                # for SmolVLM
   "mlflow>=3.11.1",
   "nvidia-nvshmem-cu13; sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')", # for deep_ep build
@@ -81,7 +83,7 @@ automodel = [
   "flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.1/flash_attn-2.8.1+cu13torch2.10cxx11abiTRUE-cp313-cp313-linux_aarch64.whl ; sys_platform == 'linux' and platform_machine == 'aarch64'",
   "flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.1/flash_attn-2.8.1+cu13torch2.10cxx11abiTRUE-cp313-cp313-linux_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64'",
   "flash-attn==2.8.1 ; sys_platform != 'linux' or (platform_machine != 'aarch64' and platform_machine != 'x86_64')",
-  "transformers>=5.3.0",
+  "transformers>=5.3.0,<5.4.0",
   "mamba-ssm",
   "causal-conv1d",
   "nv-grouped-gemm",
@@ -91,7 +93,7 @@ automodel = [
 ]
 vllm = [
   "cuda-python",
-  "deep_gemm @ git+https://github.com/deepseek-ai/DeepGEMM.git@7b6b5563b9d4c1ae07ffbce7f78ad3ac9204827c",
+  "deep_gemm @ git+https://github.com/deepseek-ai/DeepGEMM.git@67fc64863d43521080bf2005e6528d0fceee9510",
   # deep_ep also needs libibverbs-dev
   # sudo apt-get update
   # sudo apt-get install libibverbs-dev
@@ -125,6 +127,8 @@ mcore = [
   "transformer-engine[pytorch,core_cu13] @ git+https://github.com/NVIDIA/TransformerEngine.git@v2.14.1",
   "megatron-core",
   "megatron-bridge",
+  # GLM 5 support in Megatron-Bridge main requires this Transformers range.
+  "transformers>=5.5.0,<=5.6.0",
   "nvidia-modelopt[torch]; sys_platform != 'darwin'",
   "onnxscript",
   # Flash-attn version should be selected to satisfy both TE + vLLM requirements (xformers in particular)

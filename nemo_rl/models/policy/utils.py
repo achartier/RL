@@ -16,7 +16,7 @@ import gc
 import os
 import traceback
 from enum import Enum
-from typing import Any, Dict, Iterable
+from typing import Any, Dict, Iterable, Optional
 
 import requests
 import torch
@@ -481,7 +481,9 @@ def _flush_bucket(
 
     my_rank = dist.get_rank()
     group_world = dist.get_world_size(gather_group)
-    gathered = [None] * group_world if my_rank == gather_src else None
+    gathered: Optional[list[list[str]]] = (
+        [[]] * group_world if my_rank == gather_src else None
+    )
     dist.gather_object(
         serialized,
         object_gather_list=gathered,
@@ -492,6 +494,7 @@ def _flush_bucket(
     if my_rank != gather_src:
         return
 
+    assert gathered is not None
     num_dtypes = len(gathered[0])
     assert num_dtypes > 0
     for i in range(num_dtypes):
