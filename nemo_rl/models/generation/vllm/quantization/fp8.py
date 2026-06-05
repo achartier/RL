@@ -564,9 +564,22 @@ def process_weights_after_loading_moe(self, layer) -> None:
     getattr(layer, f"w13_{self.weight_scale_name}").copy_(w13_scale)
     getattr(layer, f"w2_{self.weight_scale_name}").copy_(w2_scale)
 
-    # Set up the MoE kernel (same as upstream _setup_kernel but without replace_parameter).
+    # Set up the MoE kernel on initial load only (same as upstream _setup_kernel
+    # but without replace_parameter).
+    #
+    # Gate on `self.moe_kernel is None` (not hasattr) because FusedMoEMethodBase
+    # always initialises self.moe_kernel = None, so hasattr() is always True and
+    # would silently skip kernel creation on every call, leaving moe_kernel=None.
+    # With moe_kernel=None, FusedMoEMethodBase.supports_internal_mk returns False,
+    # causing maybe_init_modular_kernel() to call maybe_make_prepare_finalize()
+    # which raises "Fp8MoEMethod uses new modular kernel initialization logic".
+    #
+    # Skipping when moe_kernel is already set (non-None) also handles the refit
+    # path (finalize_layerwise_reload → process_weights_after_loading) which
+    # lacks the set_current_vllm_config context that flashinfer_cutlass_moe.__init__
+    # requires. The kernel topology is fixed; only weights change on refit.
     self.moe_quant_config = self.get_fused_moe_quant_config(layer)
-    if self.moe_quant_config:
+    if self.moe_quant_config and self.moe_kernel is None:
         from vllm.model_executor.layers.quantization.fp8 import make_fp8_moe_kernel
 
         assert self.experts_cls is not None
