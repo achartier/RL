@@ -41,6 +41,7 @@ policy:
     scheduler:
       lr_warmup_iters: 2
       lr_warmup_init: 5.0e-08
+    log_throughput_to_tensorboard: true
   generation:
     vllm_cfg:
       precision: fp8

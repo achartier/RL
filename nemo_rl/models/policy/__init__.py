@@ -277,6 +277,9 @@ class MegatronConfig(TypedDict):
     linear_ce_fusion_chunk_size: NotRequired[int]
     # When mtp_num_layers=0, Multi-Token Prediction is disabled.
     mtp_num_layers: NotRequired[int]
+    # Log throughput (TFLOP/s/GPU) to TensorBoard each training iteration.
+    # Requires Megatron-Bridge to compute num_flops from the model config.
+    log_throughput_to_tensorboard: NotRequired[bool]
 
 
 class DraftConfigDisabled(TypedDict):

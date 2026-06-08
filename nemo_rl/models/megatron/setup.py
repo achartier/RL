@@ -849,7 +849,12 @@ def _create_megatron_config(
     return ConfigContainer(
         model=model_cfg,
         checkpoint=checkpoint_config,
-        logger=LoggerConfig(logging_level=0),
+        logger=LoggerConfig(
+            logging_level=0,
+            log_throughput_to_tensorboard=config["megatron_cfg"].get(
+                "log_throughput_to_tensorboard", False
+            ),
+        ),
         train=TrainingConfig(
             micro_batch_size=1,  # ignored
             global_batch_size=config["train_global_batch_size"],  # ignored
