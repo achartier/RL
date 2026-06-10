@@ -547,6 +547,10 @@ class MegatronPolicyWorkerImpl(
             self.mcore_state.cfg.model.seq_length = self.cfg[
                 "max_total_sequence_length"
             ]
+            warnings.warn(
+                f"[MFU diag] seq_length: {_orig_seq} → {self.mcore_state.cfg.model.seq_length}, "
+                f"moe_router_topk: {getattr(self.mcore_state.cfg.model, 'moe_router_topk', 'MISSING')}"
+            )
             try:
                 flops_per_sample = _mb_flop_utils.num_floating_point_operations(
                     self.mcore_state.cfg, batch_size=1
