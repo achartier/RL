@@ -142,7 +142,7 @@ vllm = [
   "num2words>=0.5.14",
   "flashinfer-python==0.6.8.post1",
   "flashinfer-cubin==0.6.8.post1",
-  "nvidia-cutlass-dsl>=4.4.0.dev1",
+  "nvidia-cutlass-dsl>=4.6.0",
 ]
 sglang = [
   "sglang==0.5.11",
@@ -161,6 +161,7 @@ mcore = [
   "transformer-engine[pytorch,core_cu13] @ git+https://github.com/NVIDIA/TransformerEngine.git@v2.14.1",
   "megatron-core",
   "megatron-bridge",
+  "nvidia-cudnn-frontend[cutedsl]==1.25.0",
   # Megatron-Bridge main requires this Transformers range.
   "transformers>=5.8.1,<5.9.0",
   "nvidia-modelopt[torch]; sys_platform != 'darwin'",
@@ -331,7 +332,7 @@ override-dependencies = [
   "flashinfer-python>=0.5.0",
   "flashinfer-cubin>=0.5.0",
   # Override to >=4.4.1 so uv can resolve to a version satisfying both vllm and sglang.
-  "nvidia-cutlass-dsl>=4.4.1",
+  "nvidia-cutlass-dsl>=4.6.0",
   # Relax megatron-core workspace member's opentelemetry-api ceiling (<1.34) for protobuf 6.x compat with ray
   "opentelemetry-api>=1.33.1",
   # Megatron-Bridge main requires Transformers 5.8.x.
